@@ -1,16 +1,24 @@
 #!/bin/sh
 file="${OTP_ACCOUNTS:-$HOME/.local/share/otp_accounts}"
 json="$(@PREFIX@/libexec/cbc-file unlock "$file")"
-label="$(printf %s "$json" |
-	jq '.[].label' |
+
+pre_label="$(printf %s "$json" |
+	jq '.[].label' 2>/dev/null)"
+[ -z "$pre_label" ] && exit 1
+
+label="$(printf %s "$pre_label" |
 	fzf --cycle -1 ${1:+--query "$1"}
 	)"
+[ -z "$label" ] && exit 1
+
 secret="$(printf %s "$json" |
 	jq --raw-output ".[] | select (.label | contains($label)) | .secret"
 	)"
-token="$(oathtool --totp -b -d 6 "$secret")"
-printf %s $token
+[ -z "$secret" ] && exit 1
 
-if [ "$WAYLAND_DISPLAY" ]; then
-	printf %s $token | wl-copy
+token="$(oathtool --totp -b -d 6 "$secret")"
+printf %s "$token"
+
+if [ "$WAYLAND_DISPLAY" ] && command -v wl-copy >/dev/null; then
+	printf %s "$token" | wl-copy
 fi
