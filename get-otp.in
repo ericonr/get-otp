@@ -1,14 +1,12 @@
 #!/bin/sh
 file="${OTP_ACCOUNTS:-$HOME/.local/share/otp_accounts}"
 json="$(@PREFIX@/libexec/cbc-file unlock "$file")"
+[ -z "$json" ] && exit 1
 
-pre_label="$(printf %s "$json" |
-	jq '.[].label' 2>/dev/null)"
-[ -z "$pre_label" ] && exit 1
-
-label="$(printf %s "$pre_label" |
+label="$(printf %s "$json" |
+	jq '.[].label' 2>/dev/null |
 	fzf --cycle -1 ${1:+--query "$1"}
-	)"
+)"
 [ -z "$label" ] && exit 1
 
 secret="$(printf %s "$json" |
