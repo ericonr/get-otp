@@ -1,6 +1,6 @@
 #!/bin/sh
 file="${OTP_ACCOUNTS:-$HOME/.local/share/otp_accounts}"
-json="$(@PREFIX@/libexec/cbc-file unlock "$file")"
+json="$(@PREFIX@/bin/cbc-file unlock "$file")"
 [ -z "$json" ] && exit 1
 
 label="$(printf %s "$json" |

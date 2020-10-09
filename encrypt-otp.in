@@ -7,7 +7,7 @@ if [ ! -e "$file" ]; then
 	exit 1
 fi
 
-if @PREFIX@/libexec/cbc-file lock "$file" > "$dest"; then
+if @PREFIX@/bin/cbc-file lock "$file" > "$dest"; then
 	echo "'$dest' successfully generated!"
 	exit 0
 else

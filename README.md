@@ -36,7 +36,7 @@ $ encrypt-otp otp_accounts.json
 
 ## cbc-file
 
-Hidden utility, does the encryption magic. Despite the name, uses
+Mostly hidden utility, does the encryption magic. Despite the name, uses
 [ChaCha20+Poly1305](https://tools.ietf.org/html/rfc7539) for encryption, as
 implemented by [BearSSL](https://www.bearssl.org/), together with
 [argon2](https://github.com/p-h-c/phc-winner-argon2) for key derivation.

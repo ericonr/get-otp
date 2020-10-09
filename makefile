@@ -14,8 +14,7 @@ encrypt-otp: encrypt-otp.in
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	mkdir -p $(DESTDIR)$(PREFIX)/libexec
-	install -Dm755 cbc-file $(DESTDIR)$(PREFIX)/libexec/
+	install -Dm755 cbc-file $(DESTDIR)$(PREFIX)/bin/
 	install -Dm755 get-otp $(DESTDIR)$(PREFIX)/bin/
 	install -Dm755 encrypt-otp $(DESTDIR)$(PREFIX)/bin/
 
