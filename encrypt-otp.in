@@ -1,0 +1,16 @@
+#!/bin/sh
+dest="${OTP_ACCOUNTS:-$HOME/.local/share/otp_accounts}"
+file="$1"
+
+if [ ! -e "$file" ]; then
+	echo "'$file' doesn't exist!"
+	exit 1
+fi
+
+if @PREFIX@/libexec/cbc-file lock "$file" > "$dest"; then
+	echo "'$dest' successfully generated!"
+	exit 0
+else
+	echo "couldn't create '$dest'"
+	exit 1
+fi
