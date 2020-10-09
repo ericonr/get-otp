@@ -94,7 +94,10 @@ static ssize_t open_file_for_read(char *name, uint8_t **buffer)
 		return -1;
 	}
 
-	fread(*buffer, size, 1, file);
+	if (fread(*buffer, 1, size, file) != (size_t)size) {
+		fputs("mismatched file size and bytes read!\n", stderr);
+		return -1;
+	}
 	fclose(file);
 
 	return size;
