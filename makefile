@@ -1,5 +1,7 @@
 EXE = cbc-file
-LDLIBS = -lbearssl
+LDLIBS = -lbearssl -largon2
+OPT = -O2
+CFLAGS = -std=c99 $(OPT) -Wall -Wextra -Werror=implicit -pedantic
 
 SCRIPT = get-otp
 

@@ -21,14 +21,20 @@
 #include <fcntl.h>
 
 #include <bearssl.h>
+#include <argon2.h>
 
-#define PASS_LENGTH 32
+#define KEY_LENGTH 32
 #define SALT_LENGTH 32
 #define IV_LENGTH 32
 #define AAD_LENGTH 32
 #define TAG_LENGTH 16
-
 #define FINAL_LENGTH (1 + SALT_LENGTH + IV_LENGTH + AAD_LENGTH + TAG_LENGTH)
+
+#define TIME_COST 32 /* 32 computations */
+#define MEM_COST (1 << 16) /* 2^16 bytes */
+#define PARALLEL 4 /* number of threads/lanes */
+#define PASS_LENGTH 32
+
 
 enum encryption_type {
 CHACHA20POLY1305 = 1,
@@ -41,10 +47,18 @@ static void usage(void)
 	exit(1);
 }
 
-static int read_password(uint8_t *key)
+static int read_password(uint8_t *key, const uint8_t *salt)
 {
-	fprintf(stderr, "input password (up to %d): ", PASS_LENGTH);
-	fgets(key, PASS_LENGTH, stdin);
+	fprintf(stderr, "input password (up to %d): ", KEY_LENGTH);
+
+	char pass[PASS_LENGTH];
+	if (fgets(pass, PASS_LENGTH, stdin) == NULL) {
+		return -1;
+	}
+
+	argon2id_hash_raw(TIME_COST, MEM_COST, PARALLEL,
+					  pass, strlen(pass), salt, SALT_LENGTH,
+					  key, KEY_LENGTH);
 
 	return 0;
 }
@@ -96,7 +110,7 @@ int main(int argc, char **argv)
 	ssize_t bytes;
 
 	uint8_t enctype;
-	uint8_t key[PASS_LENGTH] = { 0 };
+	uint8_t key[KEY_LENGTH] = { 0 };
 	uint8_t iv[IV_LENGTH];
 	uint8_t aad[AAD_LENGTH];
 	uint8_t salt[SALT_LENGTH];
@@ -108,14 +122,14 @@ int main(int argc, char **argv)
 		if (bytes < 0) {
 			return 1;
 		}
-		if (read_password(key) < 0) {
-			return 1;
-		}
 
 		if (getentropy(iv, IV_LENGTH) < 0
 			|| getentropy(aad, AAD_LENGTH) < 0
 			|| getentropy(salt, SALT_LENGTH) < 0) {
 			perror("getentropy()");
+			return 1;
+		}
+		if (read_password(key, salt) < 0) {
 			return 1;
 		}
 
@@ -136,9 +150,6 @@ int main(int argc, char **argv)
 		if (bytes < FINAL_LENGTH) {
 			return 1;
 		}
-		if (read_password(key) < 0) {
-			return 1;
-		}
 
 		memcpy(&enctype, buffer, 1);
 		buffer += 1;
@@ -156,6 +167,10 @@ int main(int argc, char **argv)
 		buffer += TAG_LENGTH;
 
 		bytes -= FINAL_LENGTH;
+
+		if (read_password(key, salt) < 0) {
+			return 1;
+		}
 
 		uint8_t new_tag[TAG_LENGTH];
 		br_poly1305_ctmul_run(key, iv, buffer, bytes, aad, AAD_LENGTH, new_tag, br_chacha20_ct_run, 0);
