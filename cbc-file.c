@@ -1,3 +1,16 @@
+/*
+ * This is an implementation that intends to provide a simple executable to
+ * encrypt and decrypt an arbitrary file.
+ *
+ * The file is encrypted with ChaCha20+Poly1305 and [WIP] the key is derived from the
+ * password input and a salt.
+ *
+ * File format:
+ * <encryption type: 1 byte> <salt: 32 bytes> <iv: 32 bytes> <aad: 32 bytes> <tag: 16 bytes> <file>
+ */
+
+#define _DEFAULT_SOURCE /* getentropy() */
+#define _XOPEN_SOURCE 600 /* fdopen() */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,8 +22,18 @@
 
 #include <bearssl.h>
 
-#define INPUT_PASS_LENGTH 8
-#define PASS_LENGTH 16
+#define PASS_LENGTH 32
+#define SALT_LENGTH 32
+#define IV_LENGTH 32
+#define AAD_LENGTH 32
+#define TAG_LENGTH 16
+
+#define FINAL_LENGTH (1 + SALT_LENGTH + IV_LENGTH + AAD_LENGTH + TAG_LENGTH)
+
+enum encryption_type {
+CHACHA20POLY1305 = 1,
+};
+const enum encryption_type default_enctype = CHACHA20POLY1305;
 
 static void usage(void)
 {
@@ -18,10 +41,12 @@ static void usage(void)
 	exit(1);
 }
 
-static void read_password(uint8_t *key)
+static int read_password(uint8_t *key)
 {
-	fprintf(stderr, "input password (%d): ", INPUT_PASS_LENGTH);
-	fread(key, 1, INPUT_PASS_LENGTH, stdin);
+	fprintf(stderr, "input password (up to %d): ", PASS_LENGTH);
+	fgets(key, PASS_LENGTH, stdin);
+
+	return 0;
 }
 
 static off_t file_size(int fd)
@@ -29,7 +54,7 @@ static off_t file_size(int fd)
 	struct stat s = { 0 };
 	int rv = fstat(fd, &s);
 	if (rv != 0) {
-		fprintf(stderr, "couldn't stat file: %m\n");
+		perror("fstat()");
 		exit(100);
 	}
 	return s.st_size;
@@ -37,27 +62,28 @@ static off_t file_size(int fd)
 
 static ssize_t open_file_for_read(char *name, uint8_t **buffer)
 {
-	int f = open(name, O_RDONLY);
+	int f = open(name, O_RDONLY | O_CLOEXEC);
 	if (f < 0) {
-		fputs("couldn't open file!", stderr);
-		exit(100);
+		perror("open()");
+		return -1;
 	}
 
 	off_t size = file_size(f);
-	ssize_t blocks = size / br_aes_big_BLOCK_SIZE;
-	if (blocks * br_aes_big_BLOCK_SIZE < size) blocks++;
-	fprintf(stderr, "total blocks: %lu\n", blocks);
-
-	FILE *file = fdopen(f, "r");
-	*buffer = calloc(blocks, br_aes_big_BLOCK_SIZE);
-	if (buffer == 0) {
-		fprintf(stderr, "couldn't allocate buffer: %m\n");
-		exit(101);
+	*buffer = calloc(1, size);
+	if (buffer == NULL) {
+		perror("calloc()");
+		return -1;
 	}
+	FILE *file = fdopen(f, "r");
+	if (file == NULL) {
+		perror("fdopen()");
+		return -1;
+	}
+
 	fread(*buffer, size, 1, file);
 	fclose(file);
 
-	return blocks * br_aes_big_BLOCK_SIZE;
+	return size;
 }
 
 int main(int argc, char **argv)
@@ -66,31 +92,78 @@ int main(int argc, char **argv)
 		usage();
 	}
 
+	uint8_t *buffer;
+	ssize_t bytes;
+
+	uint8_t enctype;
+	uint8_t key[PASS_LENGTH] = { 0 };
+	uint8_t iv[IV_LENGTH];
+	uint8_t aad[AAD_LENGTH];
+	uint8_t salt[SALT_LENGTH];
+	uint8_t tag[TAG_LENGTH];
+
 	if (strcmp(argv[1], "lock") == 0) {
 		// locking code
-		uint8_t *buffer;
-		ssize_t bytes = open_file_for_read(argv[2], &buffer);
+		bytes = open_file_for_read(argv[2], &buffer);
+		if (bytes < 0) {
+			return 1;
+		}
+		if (read_password(key) < 0) {
+			return 1;
+		}
 
-		uint8_t key[PASS_LENGTH] = { 0 };
-		uint8_t iv[32] = { 0 };
-		read_password(key);
+		if (getentropy(iv, IV_LENGTH) < 0
+			|| getentropy(aad, AAD_LENGTH) < 0
+			|| getentropy(salt, SALT_LENGTH) < 0) {
+			perror("getentropy()");
+			return 1;
+		}
 
-		br_aes_big_cbcenc_keys br = { 0 };
-		br_aes_big_cbcenc_init(&br, key, PASS_LENGTH);
-		br_aes_big_cbcenc_run(&br, iv, buffer, bytes);
+		br_poly1305_ctmul_run(key, iv, buffer, bytes, aad, AAD_LENGTH, tag, br_chacha20_ct_run, 1);
+
+		enctype = default_enctype;
+		fwrite(&enctype, 1, 1, stdout);
+
+		fwrite(salt, 1, SALT_LENGTH, stdout);
+		fwrite(iv, 1, IV_LENGTH, stdout);
+		fwrite(aad, 1, AAD_LENGTH, stdout);
+		fwrite(tag, 1, TAG_LENGTH, stdout);
+
 		fwrite(buffer, 1, bytes, stdout);
 	} else if (strcmp(argv[1], "unlock") == 0) {
 		// unlocking code
-		uint8_t *buffer;
-		ssize_t bytes = open_file_for_read(argv[2], &buffer);
+		bytes = open_file_for_read(argv[2], &buffer);
+		if (bytes < FINAL_LENGTH) {
+			return 1;
+		}
+		if (read_password(key) < 0) {
+			return 1;
+		}
 
-		uint8_t key[PASS_LENGTH] = { 0 };
-		uint8_t iv[32] = { 0 };
-		read_password(key);
+		memcpy(&enctype, buffer, 1);
+		buffer += 1;
+		if (enctype != default_enctype) {
+			fputs("wrong encryption mode!\n", stderr);
+			return 1;
+		}
+		memcpy(salt, buffer, SALT_LENGTH);
+		buffer += SALT_LENGTH;
+		memcpy(iv, buffer, IV_LENGTH);
+		buffer += IV_LENGTH;
+		memcpy(aad, buffer, AAD_LENGTH);
+		buffer += AAD_LENGTH;
+		memcpy(tag, buffer, TAG_LENGTH);
+		buffer += TAG_LENGTH;
 
-		br_aes_big_cbcdec_keys br = { 0 };
-		br_aes_big_cbcdec_init(&br, key, PASS_LENGTH);
-		br_aes_big_cbcdec_run(&br, iv, buffer, bytes);
+		bytes -= FINAL_LENGTH;
+
+		uint8_t new_tag[TAG_LENGTH];
+		br_poly1305_ctmul_run(key, iv, buffer, bytes, aad, AAD_LENGTH, new_tag, br_chacha20_ct_run, 0);
+		if (memcmp(tag, new_tag, TAG_LENGTH)) {
+			fputs("bad tag!\n", stderr);
+			return 1;
+		}
+
 		fwrite(buffer, 1, bytes, stdout);
 	} else {
 		usage();
