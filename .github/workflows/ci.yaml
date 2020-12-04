@@ -6,12 +6,12 @@ jobs:
       container: voidlinux/voidlinux-musl
       steps:
          - uses: actions/checkout@v1
-         - run: xbps-install -Sy gcc make bearssl-devel
+         - run: xbps-install -Sy gcc make bearssl-devel libargon2-devel
          - run: ci/run.sh
    clang-glibc:
       runs-on: ubuntu-latest
       container: voidlinux/voidlinux
       steps:
          - uses: actions/checkout@v1
-         - run: xbps-install -Sy clang make bearssl-devel
+         - run: xbps-install -Sy clang make bearssl-devel libargon2-devel
          - run: CC=clang ci/run.sh
