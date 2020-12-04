@@ -2,7 +2,7 @@
  * This is an implementation that intends to provide a simple executable to
  * encrypt and decrypt an arbitrary file.
  *
- * The file is encrypted with ChaCha20+Poly1305 and [WIP] the key is derived from the
+ * The file is encrypted with ChaCha20+Poly1305 and the key is derived from the
  * password input and a salt.
  *
  * File format:
