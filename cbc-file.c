@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <termios.h>
 
 #include <bearssl.h>
 #include <argon2.h>
@@ -51,10 +52,20 @@ static int read_password(uint8_t *key, const uint8_t *salt)
 {
 	fprintf(stderr, "input password (up to %d): ", KEY_LENGTH);
 
+	struct termios old, t;
+	tcgetattr(STDIN_FILENO, &old);
+	t = old;
+	// only disable echo, keep other attributes
+	t.c_lflag = old.c_lflag & ~(ECHO);
+	tcsetattr(STDIN_FILENO, TCSANOW, &t);
+
 	char pass[PASS_LENGTH];
 	if (fgets(pass, PASS_LENGTH, stdin) == NULL) {
 		return -1;
 	}
+
+	// restore previous attributes
+	tcsetattr(STDIN_FILENO, TCSANOW, &old);
 
 	argon2id_hash_raw(TIME_COST, MEM_COST, PARALLEL,
 					  pass, strlen(pass), salt, SALT_LENGTH,
