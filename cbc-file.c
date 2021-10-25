@@ -50,6 +50,8 @@ static void usage(void)
 
 static int read_password(uint8_t *key, const uint8_t *salt)
 {
+	int rv = -1;
+
 	fprintf(stderr, "input password (up to %d): ", KEY_LENGTH);
 
 	struct termios old, t;
@@ -61,17 +63,21 @@ static int read_password(uint8_t *key, const uint8_t *salt)
 
 	char pass[PASS_LENGTH];
 	if (fgets(pass, PASS_LENGTH, stdin) == NULL) {
-		return -1;
+		// echo should always be turned off at exit
+		goto end;
 	}
+	rv = 0;
 
+	argon2id_hash_raw(
+		TIME_COST, MEM_COST, PARALLEL,
+		pass, strlen(pass), salt, SALT_LENGTH,
+		key, KEY_LENGTH);
+
+end:
 	// restore previous attributes
 	tcsetattr(STDIN_FILENO, TCSANOW, &old);
 
-	argon2id_hash_raw(TIME_COST, MEM_COST, PARALLEL,
-					  pass, strlen(pass), salt, SALT_LENGTH,
-					  key, KEY_LENGTH);
-
-	return 0;
+	return rv;
 }
 
 static off_t file_size(int fd)
