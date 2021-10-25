@@ -3,9 +3,19 @@ file="${OTP_ACCOUNTS:-$HOME/.local/share/otp_accounts}"
 json="$(@PREFIX@/bin/cbc-file unlock "$file")"
 [ -z "$json" ] && exit 1
 
+finder=
+if command -v ef >/dev/null; then
+	finder="ef -c -1"
+elif command -v fzf >/dev/null; then
+	finder="fzf --cycle -1"
+else
+	echo "couldn't find finder" >&2
+	exit 1
+fi
+
 label="$(printf %s "$json" |
 	jq '.[].label' 2>/dev/null |
-	fzf --cycle -1 ${1:+--query "$1"}
+	$finder ${1:+-q "$1"}
 )"
 [ -z "$label" ] && exit 1
 
