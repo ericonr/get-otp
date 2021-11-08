@@ -42,6 +42,15 @@ CHACHA20POLY1305 = 1,
 };
 const enum encryption_type default_enctype = CHACHA20POLY1305;
 
+/* constant time */
+static int ct_memcmp(const void *va, const void *vb, size_t l)
+{
+	const unsigned char *a = va, *b = vb;
+	unsigned char rv = 0;
+	for (size_t i=0; i<l; i++) rv |= a[i] ^ b[i];
+	return rv;
+}
+
 static void usage(void)
 {
 	fputs("Usage: cbd-file lock|unlock <file>", stderr);
@@ -194,7 +203,7 @@ int main(int argc, char **argv)
 
 		uint8_t new_tag[TAG_LENGTH];
 		br_poly1305_ctmul_run(key, iv, buffer, bytes, aad, AAD_LENGTH, new_tag, br_chacha20_ct_run, 0);
-		if (memcmp(tag, new_tag, TAG_LENGTH)) {
+		if (ct_memcmp(tag, new_tag, TAG_LENGTH)) {
 			fputs("bad tag!\n", stderr);
 			return 1;
 		}
