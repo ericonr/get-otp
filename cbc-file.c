@@ -53,7 +53,7 @@ static int ct_memcmp(const void *va, const void *vb, size_t l)
 
 static void usage(void)
 {
-	fputs("Usage: cbd-file lock|unlock <file>", stderr);
+	fputs("Usage: cbd-file lock|unlock <file>\n", stderr);
 	exit(1);
 }
 
