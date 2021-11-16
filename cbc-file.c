@@ -26,7 +26,7 @@
 
 #define KEY_LENGTH 32
 #define SALT_LENGTH 32
-#define IV_LENGTH 32
+#define IV_LENGTH 32 /* should be 12 bytes, but keep 32 for backwards compat and possible future changes */
 #define AAD_LENGTH 32
 #define TAG_LENGTH 16
 #define FINAL_LENGTH (1 + SALT_LENGTH + IV_LENGTH + AAD_LENGTH + TAG_LENGTH)
